@@ -4,19 +4,21 @@ namespace WPEAI;
 
 use wpdb;
 
-class WPEAI_users
+class WPEAI_posts
 {
 
   public $wpdb;
-  public $user_table_name;
-  public $usermeta_table_name;
+  public $posts_table_name;
+  public $postmeta_table_name;
+  public $term_relationships_table_name;
 
   public function __construct()
   {
     global $wpdb;
     $this->wpdb = $wpdb;
-    $this->user_table_name = $wpdb->users;
-    $this->usermeta_table_name = $wpdb->usermeta;
+    $this->posts_table_name = $wpdb->posts;
+    $this->postmeta_table_name = $wpdb->postmeta;
+    $this->term_relationships_table_name = $wpdb->term_relationships;
     add_action('admin_init', [$this, 'export']);
     add_action('admin_init', [$this, 'import']);
   }
