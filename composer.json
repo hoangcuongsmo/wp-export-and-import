@@ -1,0 +1,15 @@
+{
+    "name": "pv/wp-export-and-import",
+    "autoload": {
+        "psr-4": {
+            "WPEAI\\": "includes/"
+        }
+    },
+    "authors": [
+        {
+            "name": "hoangcuongsmo",
+            "email": "hoangcuongsmo@gmail.com"
+        }
+    ],
+    "require": {}
+}
