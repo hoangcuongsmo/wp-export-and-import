@@ -102,7 +102,6 @@ class WPEAI_users
     $this->wpdb->query("INSERT INTO $this->user_table_name ($fields_str) VALUES ($values)");
 
     $user_id = $this->wpdb->insert_id;
-    var_dump($user_id);
     update_user_meta($user_id, 'old_site_id', $user['ID']);
     $usermeta = $user['usermeta'] ?? [];
     if (!empty($usermeta)) {

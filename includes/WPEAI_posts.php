@@ -23,52 +23,33 @@ class WPEAI_posts
     add_action('admin_init', [$this, 'import']);
   }
 
-  protected function fields($without_id = false)
-  {
-    $user_table_fields = ['ID', 'user_login', 'user_pass', 'user_nicename', 'user_email', 'user_url', 'user_registered', 'user_activation_key', 'user_status', 'display_name'];
-    if ($without_id) {
-      $user_table_fields = ['user_login', 'user_pass', 'user_nicename', 'user_email', 'user_url', 'user_registered', 'user_activation_key', 'user_status', 'display_name'];
-    }
-    return apply_filters('WPEAI_users_table_fields', $user_table_fields);
-  }
-
-  protected function meta_fields()
-  {
-    $usermeta_table_fields = ['umeta_id', 'user_id', 'meta_key', 'meta_value'];
-    return apply_filters('WPEAI_usermeta_table_fields', $usermeta_table_fields);
-  }
-
   public function export()
   {
+    if (!isset($_POST['export_posts'])) return;
+    $sql_query = "SELECT 
+      p.*,
+      (
+        SELECT JSON_OBJECTAGG(t.k, t.v)
+        FROM (
+          SELECT 
+            CASE 
+              WHEN meta_key IS NULL OR TRIM(meta_key) = '' THEN CONCAT('_null_key_', meta_id)
+              ELSE meta_key
+            END AS k,
+            meta_value AS v
+          FROM cpc_postmeta
+          WHERE post_id = p.ID
+        ) AS t
+      ) AS meta
+    FROM cpc_posts AS p
+    WHERE p.post_type IN ('post','attachment','revision', 'research')
+    ORDER BY p.ID";
+    $results = $this->wpdb->get_results($sql_query);
+    $posts = array_map(function ($row) {
+      return (array) $row;
+    }, $results);
 
-    if (!isset($_POST['export_user'])) return;
-
-    $query_str = "SELECT * FROM $this->user_table_name";
-    $users = $this->wpdb->get_results($query_str);
-
-    $json_data = [];
-    foreach ($users as $user_key => $user) {
-
-      $fields = $this->fields();
-
-      // Get user data to json file
-      foreach ($fields as $field_key => $field) {
-        $json_data[$user_key][$field] = $user->$field;
-      }
-
-      // Get user metas and add to json file
-      $user_metas = $this->wpdb->get_results($this->wpdb->prepare("SELECT * FROM cpc_usermeta WHERE user_id = %d", $user->ID));
-      foreach ($user_metas as $user_meta) {
-        $json_data[$user_key]['usermeta'][] = [
-          'umeta_id' => $user_meta->umeta_id,
-          'user_id' => $user_meta->user_id,
-          'meta_key' => $user_meta->meta_key,
-          'meta_value' => $user_meta->meta_value,
-        ];
-      }
-    }
-
-    $json_string = json_encode($json_data, JSON_PRETTY_PRINT);
+    $json_string = json_encode($posts, JSON_PRETTY_PRINT);
 
     header('Content-Type: application/json; charset=utf-8');
     header('Content-Disposition: attachment; filename="user-' . date('d-m-Y-H-i-s') . '.json"');
@@ -76,56 +57,79 @@ class WPEAI_posts
     exit;
   }
 
-  public function export_user_data($usermetas) {}
+  public function fields()
+  {
+    $fields = ['post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_excerpt', 'post_status', 'comment_status', 'ping_status', 'post_password', 'post_name', 'to_ping', 'pinged', 'post_modified', 'post_modified_gmt', 'post_content_filtered', 'post_parent', 'guid', 'menu_order', 'post_type', 'post_mime_type', 'comment_count'];
+    return apply_filters('WPEAI_posts_fields', $fields);
+  }
 
   public function import()
   {
-    if (!isset($_POST['import_user'])) return;
-    $file = $_FILES['import_user_file'] ?? null ?: null;
-    $replace = $_POST['import_replace'] ?? 'no' ?: 'no';
+    if (!isset($_POST['import_posts'])) return;
+    $file = $_FILES['import_post_file'] ?? null;
     if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
-      echo "File upload lỗi!";
+      echo "File upload error!";
       return;
     }
-    $file_content = file_get_contents($file['tmp_name']);
-    if (empty($file_content)) return;
 
-    $users = json_decode($file_content, true);
-    foreach ($users as $key => $user) {
-      $this->import_user($user);
+    $file_content = file_get_contents($file['tmp_name']);
+    if (empty($file_content)) {
+      echo "File upload empty!";
+      return;
+    };
+
+    $rows = json_decode($file_content, true);
+
+    foreach ($rows as $key => $row) {
+      $sql_query_fields = Helper::fields_to_sql($this->fields());
+      $sql_query_values = Helper::values_to_sql($row, $this->fields());
+      $sql_query = $this->wpdb->prepare(
+        "INSERT INTO $this->posts_table_name ($sql_query_fields) VALUES 
+          (%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%s,%d,%s,%s,%d)",
+        $row['post_author'],
+        $row['post_date'],
+        $row['post_date_gmt'],
+        $row['post_content'],
+        $row['post_title'],
+        $row['post_excerpt'],
+        $row['post_status'],
+        $row['comment_status'],
+        $row['ping_status'],
+        $row['post_password'],
+        $row['post_name'],
+        $row['to_ping'],
+        $row['pinged'],
+        $row['post_modified'],
+        $row['post_modified_gmt'],
+        $row['post_content_filtered'],
+        $row['post_parent'],
+        $row['guid'],
+        $row['menu_order'],
+        $row['post_type'],
+        $row['post_mime_type'],
+        $row['comment_count']
+      );
+
+      $metas = json_decode($row['meta'], true);
+      $this->wpdb->query($sql_query);
+      $post_id = $this->wpdb->insert_id;
+      update_post_meta($post_id, 'old_site_id', $row['ID']);
+      $this->import_metas($post_id, $metas);
     }
   }
 
-  public function import_user($user)
+  public function import_metas($post_id, $metas)
   {
-    $fields = $this->fields(true);
-    $fields_str = implode(',', $fields);
-    $values = $this->implode_user_values($user);
-    $this->wpdb->query("INSERT INTO $this->user_table_name ($fields_str) VALUES ($values)");
-
-    $user_id = $this->wpdb->insert_id;
-    var_dump($user_id);
-    update_user_meta($user_id, 'old_site_id', $user['ID']);
-    $usermeta = $user['usermeta'] ?? [];
-    if (!empty($usermeta)) {
-      foreach ($usermeta as $meta) {
-        $this->wpdb->query(
-          $this->wpdb->prepare("INSERT INTO $this->usermeta_table_name (user_id,meta_key,meta_value) VALUES (%d,%s,%s)", $user_id, $meta['meta_key'], $meta['meta_value'])
-        );
+    if (is_array($metas)) {
+      foreach ($metas as $meta_key => $meta_value) {
+        update_post_meta($post_id, $meta_key, $meta_value);
       }
     }
   }
 
-  public function implode_user_values($user)
+  public function post_exists($post_id)
   {
-    $fields = $this->fields(true);
-    $values = '';
-    foreach ($fields as $key => $field) {
-      if ($key !== 0) $values .= ',';
-      $values .= "'$user[$field]'";
-    }
-    return $values;
+    $result = $this->wpdb->get_row("SELECT * FROM $this->postmeta_table_name WHERE meta_key = 'old_site_id' AND meta_value = $post_id");
+    return $result;
   }
-
-  public function import_user_data($usermetas) {}
 }

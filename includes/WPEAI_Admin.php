@@ -30,7 +30,6 @@ class WPEAI_Admin
     if (isset($_POST['export_user'])) {
       $WPEAI_users = new WPEAI_users;
       $users = $WPEAI_users->export();
-      var_dump($users);
     }
 ?>
     <div class="">
@@ -44,6 +43,21 @@ class WPEAI_Admin
         <br>
         <input type="submit" value="Export" name="export_user">
         <input type="submit" value="Import" name="import_user">
+      </form>
+      <h2>Import and export Posts</h2>
+      <form action="<?php echo admin_url('/admin.php?page=wp-ei'); ?>" id="iae-user" enctype="multipart/form-data" method="post">
+        <input type="file" name="import_post_file" id="import_post_file">
+        <br>
+        <input type="submit" value="Export" name="export_posts">
+        <input type="submit" value="Import" name="import_posts">
+      </form>
+
+      <h2>Import and export Terms</h2>
+      <form action="<?php echo admin_url('/admin.php?page=wp-ei'); ?>" id="iae-user" enctype="multipart/form-data" method="post">
+        <input type="file" name="import_term_file" id="import_term_file">
+        <br>
+        <input type="submit" value="Export" name="export_terms">
+        <input type="submit" value="Import" name="import_terms">
       </form>
     </div>
 <?php
