@@ -24,7 +24,7 @@ class Helper
   public static function get_new_post_from_old_id($old_id)
   {
     global $wpdb;
-    return $wpdb->get_row("SELECT * FROM {$wpdb->prefix}postmeta WHERE meta_key = 'old_site_id' AND meta_value = $old_id");
+    return $wpdb->get_row("SELECT * FROM {$wpdb->prefix}postmeta WHERE meta_key = 'old_site_id' AND meta_value = '$old_id'");
   }
 
   public static function get_wp_attached_file($media_id)
@@ -77,7 +77,7 @@ class Helper
 
   public static function media_replaced($media_id)
   {
-    if (get_post_meta($media_id, 'media_replaced', true)) {
+    if (get_post_meta($media_id, 'media_replaced', true) === '1') {
       return true;
     }
     return false;

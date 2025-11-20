@@ -81,8 +81,8 @@ class WPEAI_posts
     $rows = json_decode($file_content, true);
 
     foreach ($rows as $key => $row) {
+      $post_id = 0;
       $sql_query_fields = Helper::fields_to_sql($this->fields());
-      $sql_query_values = Helper::values_to_sql($row, $this->fields());
       $sql_query = $this->wpdb->prepare(
         "INSERT INTO $this->posts_table_name ($sql_query_fields) VALUES 
           (%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d,%s,%d,%s,%s,%d)",
@@ -113,8 +113,10 @@ class WPEAI_posts
       $metas = json_decode($row['meta'], true);
       $this->wpdb->query($sql_query);
       $post_id = $this->wpdb->insert_id;
-      update_post_meta($post_id, 'old_site_id', $row['ID']);
-      $this->import_metas($post_id, $metas);
+      if ($post_id) {
+        update_post_meta($post_id, 'old_site_id', $row['ID']);
+        $this->import_metas($post_id, $metas);
+      }
     }
   }
 

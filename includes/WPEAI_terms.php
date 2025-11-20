@@ -80,27 +80,63 @@ class WPEAI_terms
     $rows = json_decode($file_content, true);
 
     foreach ($rows as $key => $row) {
-      $term = wp_insert_term(
-        $row['name'],
-        $row['taxonomy'],
-        [
-          'slug' => $row['slug'],
-          'description' => $row['description'],
-          'count' => $row['count']
-        ]
-      );
+      if ((int)$row['parent'] === 0) {
+        $term = wp_insert_term(
+          $row['name'],
+          $row['taxonomy'],
+          [
+            'slug' => $row['slug'],
+            'description' => $row['description'],
+            'count' => $row['count']
+          ]
+        );
 
-      if (!is_wp_error($term)) {
-        $term_id = $term['term_id'];
-        $metas = $row['meta'] ? json_decode($row['meta'], true) : [];
-        foreach ($metas as $meta_key => $meta_value) {
-          update_term_meta($term_id, $meta_key, $meta_value);
+        if (!is_wp_error($term)) {
+          $term_id = $term['term_id'];
+          $metas = $row['meta'] ? json_decode($row['meta'], true) : [];
+          foreach ($metas as $meta_key => $meta_value) {
+            update_term_meta($term_id, $meta_key, $meta_value);
+          }
+          update_term_meta($term_id, 'old_site_id', $row['term_id']);
+          $related_posts = $row['related_posts'] ? json_decode($row['related_posts'], true) : [];
+          foreach ($related_posts as $post_id) {
+            $new_post = $this->get_new_post($post_id);
+            if ($new_post) {
+              wp_set_post_terms($new_post->post_id, [$term_id], $row['taxonomy'], true);
+            }
+          }
         }
-        $related_posts = $row['related_posts'] ? json_decode($row['related_posts'], true) : [];
-        foreach ($related_posts as $post_id) {
-          $new_post = $this->get_new_post($post_id);
-          if ($new_post) {
-            wp_set_post_terms($new_post->post_id, [$term_id], $row['taxonomy']);
+      }
+    }
+
+    foreach ($rows as $key => $row) {
+      if ((int)$row['parent'] !== 0) {
+        global $wpdb;
+        $parent = $wpdb->get_row("SELECT * FROM {$wpdb->prefix}termmeta WHERE meta_key = 'old_site_id' AND meta_value = '{$row['parent']}'");
+        $term = wp_insert_term(
+          $row['name'],
+          $row['taxonomy'],
+          [
+            'slug' => $row['slug'],
+            'description' => $row['description'],
+            'count' => $row['count'],
+            'parent' => $parent->term_id ?? 0 ?: 0
+          ]
+        );
+
+        if (!is_wp_error($term)) {
+          $term_id = $term['term_id'];
+          $metas = $row['meta'] ? json_decode($row['meta'], true) : [];
+          foreach ($metas as $meta_key => $meta_value) {
+            update_term_meta($term_id, $meta_key, $meta_value);
+          }
+          update_term_meta($term_id, 'old_site_id', $row['term_id']);
+          $related_posts = $row['related_posts'] ? json_decode($row['related_posts'], true) : [];
+          foreach ($related_posts as $post_id) {
+            $new_post = $this->get_new_post($post_id);
+            if ($new_post) {
+              wp_set_post_terms($new_post->post_id, [$term_id], $row['taxonomy'], true);
+            }
           }
         }
       }
